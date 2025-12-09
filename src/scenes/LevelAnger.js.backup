@@ -1,0 +1,247 @@
+import { Scene } from 'phaser';
+import { Player } from '../objects/Player';
+import { HUD } from '../objects/HUD';
+
+export class LevelAnger extends Scene {
+    constructor() {
+        super('LevelAnger');
+        this.scrollSpeed = 2; // Velocidad de scroll forzado
+    }
+
+    create() {
+        // Enable lights
+        this.lights.enable().setAmbientColor(0x661111);
+
+        // Background with forest image - full screen
+        const bg = this.add.image(0, 0, 'bg_anger').setOrigin(0, 0);
+        bg.displayWidth = 5000;
+        bg.displayHeight = 2000;
+        bg.setScrollFactor(0.3);
+        bg.setAlpha(0.7);
+
+        // Level Text
+        this.add.text(50, 50, 'Level 3: The Crimson Rush', { fontSize: '24px', fill: '#ff4444' })
+            .setScrollFactor(0);
+
+        // --- GROUPS ---
+        this.platforms = this.physics.add.staticGroup();
+        this.fragments = this.physics.add.staticGroup();
+        this.shadows = this.physics.add.group({ allowGravity: false, immovable: true });
+        this.flyingEnemies = this.physics.add.group({ allowGravity: false, immovable: true });
+
+        // --- SCROLL HORIZONTAL DESIGN ---
+        // Plataformas continuas para scroll forzado
+        for (let x = 0; x < 5000; x += 400) {
+            // Plataforma inferior
+            this.createPlatform(x, 1100, 8);
+
+            // Plataformas medias y altas aleatorias
+            if (x % 800 === 0) {
+                this.createPlatform(x + 200, 800, 4);
+                this.createMovingShadow(x + 250, 770, 100, 1200);
+            }
+            if (x % 1200 === 0) {
+                this.createPlatform(x + 100, 600, 3);
+                this.createFragment(x + 150, 550);
+            }
+        }
+
+        // Obstáculos adicionales
+        this.createMovingShadow(1500, 1070, 150, 1000);
+        this.createMovingShadow(2500, 1070, 200, 800);
+        this.createMovingShadow(3500, 1070, 150, 1000);
+
+        // Enemigos voladores (pájaros oscuros)
+        this.createFlyingEnemy(800, 400, 200, 1500);
+        this.createFlyingEnemy(1600, 600, 250, 1800);
+        this.createFlyingEnemy(2400, 500, 200, 1600);
+        this.createFlyingEnemy(3200, 700, 300, 2000);
+        this.createFlyingEnemy(4000, 450, 200, 1400);
+
+        // Fragmentos
+        this.createFragment(1000, 500);
+        this.createFragment(2000, 700);
+        this.createFragment(3000, 600);
+        this.createFragment(4000, 800);
+
+        // Goal al final
+        this.goal = this.physics.add.image(4700, 1000, 'portal');
+        this.goal.setPipeline('Light2D');
+        this.goal.setTint(0xff0000);
+        this.goal.body.allowGravity = false;
+        this.goal.body.immovable = true;
+
+        // Goal Particles
+        const particles = this.add.particles(0, 0, 'firefly', {
+            speed: 100,
+            scale: { start: 0.5, end: 0 },
+            blendMode: 'ADD',
+            lifespan: 1000,
+            gravityY: -100,
+            quantity: 2,
+            emitting: true,
+            tint: 0xffaa00
+        });
+        particles.startFollow(this.goal);
+
+        // Player
+        this.player = new Player(this, 200, 1000);
+
+        // --- COLLIDERS ---
+        this.physics.add.collider(this.player, this.platforms);
+        this.physics.add.overlap(this.player, this.fragments, this.collectFragment, null, this);
+        this.physics.add.overlap(this.player, this.shadows, this.hitShadow, null, this);
+        this.physics.add.overlap(this.player, this.flyingEnemies, this.hitShadow, null, this);
+        this.physics.add.overlap(this.player, this.goal, this.reachGoal, null, this);
+
+        // Camera con scroll forzado
+        this.cameras.main.setBounds(0, 0, 5000, 2000);
+        this.physics.world.setBounds(0, 0, 5000, 2000);
+        this.cameras.main.startFollow(this.player, false, 0.1, 0.1);
+        this.cameras.main.setZoom(1.2);
+
+        // Create HUD
+        this.hud = new HUD(this, 4); // 4 fragments total
+        this.hud.updateEnergy(this.player.currentLight, this.player.maxLight);
+
+        // Texto de advertencia
+        const warning = this.add.text(400, 200, 'Keep Moving!', {
+            fontSize: '32px',
+            fill: '#ff4444',
+            stroke: '#000',
+            strokeThickness: 4
+        }).setScrollFactor(0);
+
+        this.time.delayedCall(3000, () => {
+            this.tweens.add({
+                targets: warning,
+                alpha: 0,
+                duration: 1000,
+                onComplete: () => warning.destroy()
+            });
+        });
+    }
+
+    update() {
+        // Scroll forzado - empujar al jugador hacia adelante
+        this.player.setVelocityX(this.player.body.velocity.x + this.scrollSpeed);
+
+        // Si el jugador se queda atrás, daño
+        if (this.player.x < this.cameras.main.scrollX + 50) {
+            this.player.damage(10);
+        }
+    }
+
+    createPlatform(x, y, widthScale) {
+        const p = this.platforms.create(x, y, 'ground').setScale(widthScale, 1).refreshBody();
+        p.setPipeline('Light2D');
+        p.setTint(0x884444);
+    }
+
+    createFragment(x, y) {
+        const f = this.fragments.create(x, y, 'fragment');
+        f.setPipeline('Light2D');
+        this.tweens.add({
+            targets: f,
+            y: y - 10,
+            duration: 1500,
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    createMovingShadow(x, y, distance, duration = 2000) {
+        const s = this.shadows.create(x, y, 'shadow');
+        s.setPipeline('Light2D');
+
+        this.tweens.add({
+            targets: s,
+            x: x + distance,
+            duration: duration,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+    }
+
+    createFlyingEnemy(x, y, distance, duration) {
+        const bird = this.flyingEnemies.create(x, y, 'shadow');
+        bird.setPipeline('Light2D');
+        bird.setTint(0xaa0000); // Tono rojizo
+        bird.setScale(0.8);
+
+        // Movimiento en patrón de onda
+        this.tweens.add({
+            targets: bird,
+            y: y + distance,
+            duration: duration,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // Movimiento horizontal lento
+        this.tweens.add({
+            targets: bird,
+            x: x - 100,
+            duration: duration * 2,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Linear'
+        this.hud.updateEnergy(player.currentLight, player.maxLight);
+
+            if(isDead) {
+                this.cameras.main.shake(500, 0.02);
+                this.time.delayedCall(500, () => {
+                    this.scene.restart();
+                });
+            } else {
+                if(player.x < shadow.x) {
+            player.setVelocityX(-300);
+        } else {
+            player.setVelocityX(300);
+        }
+        player.setVelocityY(-300);
+    }
+}
+
+reachGoal(player, goal) {
+    if (this.fragments.countActive(true) > 0) {
+        const remaining = this.fragments.countActive(true);
+        const msg = this.add.text(player.x, player.y - 50, `Collect ${remaining} more lights!`, {
+            fontSize: '20px',
+            fill: '#ff4444',
+            stroke: '#000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: msg,
+            y: player.y - 80,
+            alpha: 0,
+            duration: 1500,
+            onComplete: () => msg.destroy()
+        });
+        return;
+    }
+
+    this.physics.pause();
+    this.add.text(player.x, player.y - 100, 'Level Complete!', {
+        fontSize: '48px',
+        fill: '#fff',
+        stroke: '#000',
+        strokeThickness: 6
+    }).setOrigin(0.5);
+
+    this.tweens.add({
+        targets: player,
+        angle: 360,
+        duration: 1000,
+        onComplete: () => {
+            this.time.delayedCall(2000, () => {
+                this.scene.start('LevelHope');
+            });
+        }
+    });
+}
+}
