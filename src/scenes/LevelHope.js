@@ -3,16 +3,18 @@ import { Player } from '../objects/Player';
 import { HUD } from '../objects/HUD';
 import { LevelEnvironment } from '../utils/LevelEnvironment';
 
+// Escena del nivel de Esperanza (último nivel jugable)
 export class LevelHope extends Scene {
     constructor() {
         super('LevelHope');
     }
 
     create() {
-        // === LUCES ===
-        this.lights.enable().setAmbientColor(0x886644); // dorado cálido
+        // ================== LUCES Y MÚSICA ==================
+        // Luz ambiente dorada para darle tono cálido al nivel
+        this.lights.enable().setAmbientColor(0x886644);
 
-        // --- MÚSICA DEL NIVEL ---
+        // Corto cualquier música anterior y lanzo la del nivel 4
         this.sound.stopAll();
         this.bgMusic = this.sound.add('music_level4', {
             volume: 0.5,
@@ -20,35 +22,42 @@ export class LevelHope extends Scene {
         });
         this.bgMusic.play();
 
-        // Niebla / partículas del nivel
+        // Niebla / partículas específicas de este nivel
         new LevelEnvironment(this, 'hope');
 
-        // Fondo
+        // Fondo de la escena
         const bg = this.add.image(0, 0, 'bg_hope').setOrigin(0, 0);
         bg.displayWidth = 2000;
         bg.displayHeight = 3000;
         bg.setScrollFactor(0.2);
         bg.setAlpha(0.8);
 
-        // Título de nivel
+        // Título del nivel (UI fija)
         this.add.text(100, 50, 'Level 3: The Radiant Ascension', {
             fontSize: '32px',
             fill: '#ffffff',
             stroke: '#ffaa00',
             strokeThickness: 6,
             fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(9000);
+        })
+            .setScrollFactor(0)
+            .setDepth(9000);
 
-        // === GRUPOS ===
-        this.lightPath = this.physics.add.staticGroup();  // camino de luz (plataformas fijas)
+        // ================== GRUPOS DE FÍSICAS ==================
+        // Camino principal de luz (plataformas estáticas)
+        this.lightPath = this.physics.add.staticGroup();
+        // Fragmentos de luz del nivel
         this.fragments = this.physics.add.staticGroup();
+        // Plataformas móviles que ayudan en la ascensión
         this.movingPlatforms = this.physics.add.group({
             allowGravity: false,
             immovable: true
         });
+        // Bombas que lanza el “boss”
         this.bombs = this.physics.add.group();
 
-        // === CAMINO ASCENDENTE ===
+        // ================== CAMINO ASCENDENTE ==================
+        // Lista de puntos por los que va subiendo el jugador
         const pathPoints = [
             { x: 200, y: 2800 },
             { x: 500, y: 2600 },
@@ -67,21 +76,21 @@ export class LevelHope extends Scene {
         ];
 
         pathPoints.forEach((point, index) => {
-            // plataforma principal de luz
+            // Plataforma principal de luz (camino base)
             this.createLightPath(point.x, point.y, 5, index);
 
-            // plataformas móviles extra
+            // Plataformas móviles extra para variar un poco el recorrido
             if (index % 4 === 0 && index > 0) {
                 this.createMovingPlatform(point.x + 200, point.y - 100, 4);
             }
 
-            // fragmentos
+            // Fragmentos de luz repartidos cada 3 pasos
             if (index % 3 === 0) {
                 this.createFragment(point.x, point.y - 60);
             }
         });
 
-        // Partículas ascendentes de fondo
+        // Partículas que ascienden desde la parte baja del nivel
         this.add.particles(0, 3000, 'firefly', {
             x: { min: 0, max: 2000 },
             y: 3000,
@@ -95,59 +104,64 @@ export class LevelHope extends Scene {
             tint: 0xffdd88
         });
 
-        // Portal en la cima
+        // Portal original (por si se quiere reactivar en algún momento)
         // this.goal = this.physics.add.image(1100, 100, 'portal');
         // this.goal.setPipeline('Light2D');
         // this.goal.setTint(0xffee00);
         // this.goal.setScale(1.5);
         // this.goal.body.allowGravity = false;
 
-        // Jugador (inicio abajo del todo) – 5 fragmentos en total
+        // ================== JUGADOR Y BOSS ==================
+        // Jugador al inicio de la ascensión (abajo del todo) – 5 fragmentos en total
         this.player = new Player(this, 200, 2750, 5);
 
-        // “Jefe” – gran sombra en la parte alta
+        // “Jefe” final: gran sombra que se mueve por la parte alta del nivel
         this.createBoss(1000, 150);
 
-        // HUD
+        // ================== HUD ==================
         this.hud = new HUD(this, 5);
         this.hud.updateEnergy(this.player.currentLight, this.player.maxLight);
 
-        // CÁMARA Y MUNDO
+        // ================== CÁMARA Y MUNDO ==================
         this.cameras.main.setBounds(0, 0, 2000, 3000);
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
-        // Sin colisión inferior para que caerse sea muerte
+        // Desactivo la colisión inferior: si cae, es muerte directa
         this.physics.world.setBounds(0, 0, 2000, 3000, true, true, true, false);
 
-        // COLISIONES
+        // ================== COLISIONES ==================
         this.physics.add.collider(this.player, this.lightPath);
         this.physics.add.collider(this.player, this.movingPlatforms);
+
         this.physics.add.overlap(this.player, this.fragments, this.collectFragment, null, this);
         this.physics.add.overlap(this.player, this.bombs, this.hitBomb, null, this);
-        //this.physics.add.overlap(this.player, this.goal, this.reachGoal, null, this);
+        // this.physics.add.overlap(this.player, this.goal, this.reachGoal, null, this);
+
+        // Bombas que chocan con plataformas se destruyen
         this.physics.add.overlap(this.bombs, this.lightPath, (bomb) => bomb.destroy());
         this.physics.add.overlap(this.bombs, this.movingPlatforms, (bomb) => bomb.destroy());
 
-        // Intro poética
+        // ================== INTRO POÉTICA Y PAUSA ==================
         this.showIntro('La esperanza es el sueño del que está despierto.');
 
-        // Pausa
         this.input.keyboard.on('keydown-ESC', () => {
             this.scene.pause();
             this.scene.launch('PauseScene', { activeScene: 'LevelHope' });
         });
 
-        // Flags de fase final
+        // Flags para controlar la fase final de despertar / ascensión
         this.awakeningStarted = false;
         this.ascensionPhase = false;
     }
 
     // ================== DESPERTAR DE LUMINA ==================
 
+    // Se ejecuta cuando el jugador recoge el último fragmento
     startLuminaAwakening() {
         if (this.awakeningStarted) return;
         this.awakeningStarted = true;
-        // Cortar (o hacer fade out) de la música del nivel
+
+        // Hago un fade out de la música actual
         if (this.bgMusic) {
             this.tweens.add({
                 targets: this.bgMusic,
@@ -159,24 +173,24 @@ export class LevelHope extends Scene {
             });
         }
 
+        // Música especial del despertar de Lumina
         this.awakeMusic = this.sound.add('awake_lumina', {
             volume: 0.7,
             loop: false
         });
         this.awakeMusic.play();
 
-
-        // Fase cinemática
+        // Fase cinemática: limito el control del jugador
         this.player.setCinematicState();
         this.time.timeScale = 0.5;
         this.cameras.main.zoomTo(1.5, 2000, 'Sine.easeInOut');
 
-        // Transformación visual
+        // Pequeño delay para lanzar la animación de “despertar”
         this.time.delayedCall(500, () => {
             this.player.awakeLumina();
         });
 
-        // Paso a modo vuelo / ascensión
+        // Paso al modo vuelo / ascensión
         this.time.delayedCall(3000, () => {
             this.time.timeScale = 1.0;
             this.cameras.main.zoomTo(1.0, 1000, 'Sine.easeOut');
@@ -184,16 +198,17 @@ export class LevelHope extends Scene {
             this.player.startFlying();
             this.ascensionPhase = true;
 
+            // Textos que aparecen durante la ascensión
             this.showAscensionTexts();
 
-            // ⚡ Después de unos segundos de vuelo, disparar el final
+            // Después de unos segundos, cierro el juego y lanzo el final
             this.time.delayedCall(8000, () => {
                 this.finishGame();
             });
         });
     }
 
-
+    // Muestra varias frases encadenadas mientras el jugador asciende
     showAscensionTexts() {
         const phrases = [
             'La tristeza no desaparece...',
@@ -208,6 +223,7 @@ export class LevelHope extends Scene {
         });
     }
 
+    // Dibuja un texto superpuesto en el centro de la pantalla con fade in/out
     displayOverlayText(text) {
         const t = this.add.text(
             this.cameras.main.width / 2,
@@ -238,7 +254,7 @@ export class LevelHope extends Scene {
         });
     }
 
-    // ================== INTRO ==================
+    // ================== INTRO DEL NIVEL ==================
 
     showIntro(quote) {
         this.isIntro = true;
@@ -247,21 +263,25 @@ export class LevelHope extends Scene {
         const width = this.cameras.main.width;
         const height = this.cameras.main.height;
 
+        // Capa negra sobre toda la pantalla
         const overlay = this.add
             .rectangle(width / 2, height / 2, width, height, 0x000000)
             .setScrollFactor(0)
             .setDepth(10000);
 
+        // Luciérnaga central
         const firefly = this.add
             .circle(width / 2, height / 2, 5, 0xffffaa, 1)
             .setScrollFactor(0)
             .setDepth(10002);
 
+        // Brillo alrededor de la luciérnaga
         const glow = this.add
             .circle(width / 2, height / 2, 20, 0xffffaa, 0.3)
             .setScrollFactor(0)
             .setDepth(10002);
 
+        // Animación de “respiración” de la luz
         this.tweens.add({
             targets: [firefly, glow],
             scale: { from: 1, to: 1.5 },
@@ -272,6 +292,7 @@ export class LevelHope extends Scene {
             ease: 'Sine.easeInOut'
         });
 
+        // Movimiento suave de la luciérnaga
         this.tweens.add({
             targets: [firefly, glow],
             x: '+=30',
@@ -282,6 +303,7 @@ export class LevelHope extends Scene {
             ease: 'Sine.easeInOut'
         });
 
+        // Frase poética de la intro
         const text = this.add.text(width / 2, height / 2 + 50, quote, {
             fontFamily: 'Cinzel',
             fontSize: '28px',
@@ -290,10 +312,11 @@ export class LevelHope extends Scene {
             wordWrap: { width: width * 0.8 }
         })
             .setOrigin(0.5)
-            .setAlpha(0)
             .setScrollFactor(0)
+            .setAlpha(0)
             .setDepth(10001);
 
+        // Fade in del texto y posterior salida de la intro
         this.tweens.add({
             targets: text,
             alpha: 1,
@@ -323,24 +346,26 @@ export class LevelHope extends Scene {
     update() {
         if (this.isIntro) return;
 
-        // Si se cae demasiado por debajo de la cámara -> muerte
+        // Si el jugador se cae demasiado por debajo de la cámara -> reinicio
         if (this.player.y > this.cameras.main.scrollY + this.cameras.main.height + 100) {
             this.scene.restart();
         }
 
-        // Lógica del “boss”
+        // Lógica del “boss” mientras no ha empezado el despertar
         if (this.boss && !this.awakeningStarted) {
+            // Movimiento horizontal entre los extremos
             if (this.boss.x <= 200) this.boss.setVelocityX(200);
             if (this.boss.x >= 1800) this.boss.setVelocityX(-200);
 
-            // El boss sigue la parte alta de la cámara
+            // El boss se mantiene siempre cerca de la parte alta de la cámara
             this.boss.y = this.cameras.main.scrollY + 150;
 
-            // Disparar bombas de vez en cuando
+            // Disparar bombas aleatoriamente
             if (Phaser.Math.Between(0, 100) < 2) {
                 this.shootBomb();
             }
         } else if (this.awakeningStarted && this.boss) {
+            // Una vez empieza el despertar, elimino al boss
             this.boss.destroy();
             this.boss = null;
         }
@@ -348,6 +373,7 @@ export class LevelHope extends Scene {
 
     // ================== BOSS Y BOMBAS ==================
 
+    // Crea el boss final (gran sombra)
     createBoss(x, y) {
         this.boss = this.physics.add.sprite(x, y, 'shadow');
         this.boss.setPipeline('Light2D');
@@ -359,6 +385,7 @@ export class LevelHope extends Scene {
         this.lights.addLight(x, y, 300, 0xff00ff, 2);
     }
 
+    // Lanza una bomba desde la posición actual del boss
     shootBomb() {
         if (this.awakeningStarted) return;
 
@@ -379,8 +406,10 @@ export class LevelHope extends Scene {
         particles.startFollow(bomb);
     }
 
+    // Golpe de una bomba al jugador
     hitBomb(player, bomb) {
-        if (this.awakeningStarted) return; // invulnerable durante el despertar
+        // Durante el despertar, el jugador es invulnerable a bombas
+        if (this.awakeningStarted) return;
 
         bomb.destroy();
         const isDead = player.damage(60);
@@ -395,7 +424,7 @@ export class LevelHope extends Scene {
 
     // ================== PLATAFORMAS / FRAGMENTOS ==================
 
-    // Camino de luz usando platform.png (tamaño coherente con otros niveles)
+    // Camino de luz usando platform.png (similar a otros niveles)
     createLightPath(x, y, widthScale, index) {
         const BLOCK_W = 64;
         const BLOCK_H = 24;
@@ -406,7 +435,7 @@ export class LevelHope extends Scene {
         platform.setPipeline('Light2D');
         platform.setTint(0x553311);
 
-        // Brillo
+        // Pequeño brillo para que se note que son plataformas “especiales”
         this.tweens.add({
             targets: platform,
             alpha: { from: 1, to: 0.6 },
@@ -417,7 +446,7 @@ export class LevelHope extends Scene {
             ease: 'Sine.easeInOut'
         });
 
-        // Movimiento alternado
+        // Movimiento horizontal alterno (unas hacia la derecha, otras hacia la izquierda)
         const direction = index % 2 === 0 ? 1 : -1;
         const distance = 100;
 
@@ -431,6 +460,7 @@ export class LevelHope extends Scene {
         });
     }
 
+    // Plataforma móvil adicional
     createMovingPlatform(x, y, widthScale) {
         const BLOCK_W = 64;
         const BLOCK_H = 24;
@@ -453,6 +483,7 @@ export class LevelHope extends Scene {
         });
     }
 
+    // Fragmento de luz dorado
     createFragment(x, y) {
         const f = this.fragments.create(x, y, 'fragment');
         f.setPipeline('Light2D');
@@ -472,6 +503,7 @@ export class LevelHope extends Scene {
         });
         particles.setDepth(f.depth - 1);
 
+        // Movimiento suave hacia arriba y abajo
         this.tweens.add({
             targets: f,
             y: y - 20,
@@ -482,6 +514,7 @@ export class LevelHope extends Scene {
             ease: 'Sine.easeInOut'
         });
 
+        // Pequeño parpadeo de alpha
         this.tweens.add({
             targets: f,
             alpha: { from: 1, to: 0.6 },
@@ -494,7 +527,9 @@ export class LevelHope extends Scene {
 
     // ================== FRAGMENTOS Y FINAL ==================
 
+    // Recoger fragmento de luz
     collectFragment(player, fragment) {
+        // Si ya se ha iniciado el despertar, ignoro fragmentos restantes (por seguridad)
         if (this.awakeningStarted) return;
 
         fragment.disableBody(true, true);
@@ -505,6 +540,7 @@ export class LevelHope extends Scene {
         this.hud.updateStars(collected, 5);
         this.hud.updateEnergy(player.currentLight, player.maxLight);
 
+        // Pequeño estallido de partículas al recoger
         const burst = this.add.particles(fragment.x, fragment.y, 'firefly', {
             speed: { min: 100, max: 200 },
             scale: { start: 0.8, end: 0 },
@@ -515,17 +551,18 @@ export class LevelHope extends Scene {
         });
         this.time.delayedCall(1000, () => burst.destroy());
 
-        // Último fragmento -> despertar
+        // Si ya no quedan fragmentos activos, lanzo el despertar de Lumina
         if (this.fragments.countActive(true) === 0) {
             this.startLuminaAwakening();
         }
     }
 
+    // Secuencia final del juego (pantalla de título y vuelta al menú)
     finishGame() {
-        // Escena final
         this.physics.pause();
         this.player.setCinematicState();
 
+        // Gran estallido de luz alrededor del jugador
         const finalBurst = this.add.particles(this.player.x, this.player.y, 'firefly', {
             speed: { min: 200, max: 800 },
             scale: { start: 2, end: 0 },
@@ -535,6 +572,7 @@ export class LevelHope extends Scene {
             tint: 0xffffff
         });
 
+        // Título final del juego
         const titleText = this.add.text(
             this.cameras.main.width / 2,
             this.cameras.main.height / 2,
@@ -552,6 +590,7 @@ export class LevelHope extends Scene {
             .setAlpha(0)
             .setDepth(20000);
 
+        // Subtítulo
         const subText = this.add.text(
             this.cameras.main.width / 2,
             this.cameras.main.height / 2 + 60,
@@ -567,8 +606,10 @@ export class LevelHope extends Scene {
             .setAlpha(0)
             .setDepth(20000);
 
+        // Flash blanco para remarcar el final
         this.cameras.main.flash(3000, 255, 255, 255);
 
+        // Hago aparecer título y subtítulo y vuelvo al menú principal
         this.tweens.add({
             targets: [titleText, subText],
             alpha: 1,
@@ -581,5 +622,4 @@ export class LevelHope extends Scene {
             }
         });
     }
-
 }
